@@ -1,0 +1,97 @@
+import cors from "cors";
+import dotenv from "dotenv";
+import express from "express";
+
+import authRoutes from "./routes/authRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+import projectRoutes from "./routes/projectRoutes.js";
+import taskRoutes from "./routes/taskRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import { errorHandler } from "./middleware/errorHandler.js";
+import { notFound } from "./middleware/notFound.js";
+
+dotenv.config();
+
+const app = express();
+const allowedOrigins = (
+  process.env.CLIENT_URL ||
+  "http://localhost:5173,http://127.0.0.1:5173"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+/** Vercel previews use many hostname shapes; allow any https://*.vercel.app */
+function isVercelAppOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:" && url.hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin) {
+    return true;
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  if (isVercelAppOrigin(origin)) {
+    return true;
+  }
+
+  return false;
+}
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(null, false);
+  },
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+app.use(express.json({ limit: "1mb" }));
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok"
+  });
+});
+
+app.use("/api/auth", authRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/projects", projectRoutes);
+app.use("/api/tasks", taskRoutes);
+app.use("/api/users", userRoutes);
+
+// Support both `/api/*` and plain routes so deployed clients work even if
+// VITE_API_URL is configured without the `/api` suffix.
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok"
+  });
+});
+
+app.use("/auth", authRoutes);
+app.use("/dashboard", dashboardRoutes);
+app.use("/projects", projectRoutes);
+app.use("/tasks", taskRoutes);
+app.use("/users", userRoutes);
+
+app.use(notFound);
+app.use(errorHandler);
+
+export default app;
